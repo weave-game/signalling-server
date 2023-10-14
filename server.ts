@@ -22,9 +22,9 @@ wss.on('connection', (ws: WebSocket) => {
 
 		switch (data.type) {
 			case 'register-host':
-				if (data.lobbyCode) {
+				if (data.lobby_code) {
 					host = ws;
-					lobbyCode = data.lobbyCode;
+					lobbyCode = data.lobby_code;
 					console.log('Host connected')
 				} else {
 					console.log('Missing lobby code in message')
@@ -32,7 +32,7 @@ wss.on('connection', (ws: WebSocket) => {
 				break;
 
 			case 'register-client':
-				if (data.lobbyCode && data.lobbyCode === lobbyCode && host) {
+				if (data.lobby_code && data.lobby_code === lobbyCode && host) {
 					clients[data.id] = ws;
 					console.log('Client connected with id ' + data.id)
 
@@ -53,8 +53,7 @@ wss.on('connection', (ws: WebSocket) => {
 					let client = clients[data.clientId];
 					client.send(JSON.stringify({
 						type: 'offer',
-						offer: data.offer,
-						clientId: data.clientId
+						offer: data.offer
 					}));
 					console.log('Forwarded offer')
 				} else {
@@ -63,7 +62,7 @@ wss.on('connection', (ws: WebSocket) => {
 				break;
 
 			case 'answer':
-				console.log('Forwarding answer to host...');
+				console.log('Forwarding answer to host');
 
 				if (host) {
 					host.send(JSON.stringify({

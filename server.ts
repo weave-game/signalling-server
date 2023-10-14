@@ -95,8 +95,8 @@ wss.on('connection', (ws: WebSocket) => {
 				console.log('Forwarding ICE candidate to client from host...');
 
 				// Forward the ICE candidate to the correct client.
-				let client = clients[data.clientId]
-				if (client) {
+				if (clients[data.clientId]) {
+					let client = clients[data.clientId];
 					client.send(JSON.stringify({
 						type: 'ice-candidate',
 						candidate: data.candidate
@@ -104,6 +104,22 @@ wss.on('connection', (ws: WebSocket) => {
 					console.log('Forwarded candidate');
 				} else {
 					console.error(`Could not forward candidate, ${data.clientId} does not exist`);
+				}
+				break;
+
+			case 'message':
+				console.log('Forwarding message to client from host...');
+
+				// Forward message to the correct client.
+				if (clients[data.clientId]) {
+					let client = clients[data.clientId];
+					client.send(JSON.stringify({
+						type: 'message',
+						message: data.message
+					}));
+					console.log('Forwarded message');
+				} else {
+					console.error(`Could not forward message, ${data.clientId} does not exist`);
 				}
 				break;
 

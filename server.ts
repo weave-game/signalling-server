@@ -13,7 +13,7 @@ app.get('/api/status', (_, res) => {
   res.json({ message: `Server is running, ${Object.keys(clients).length} are connected` });
 });
 
-app.get('/api/reset', (_, res) => {
+app.post('/api/reset', (_, res) => {
   lobbyCode = null;
   host = null;
   clients = {};

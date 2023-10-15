@@ -28,22 +28,28 @@ wss.on('connection', (ws) => {
                     console.log('Host connected');
                 }
                 else {
-                    console.log('Missing lobby code in message');
+                    console.error('Missing lobby code in message');
                 }
                 break;
             case 'register-client':
-                if (data.lobby_code && data.lobby_code === lobbyCode && host) {
-                    clients[data.id] = ws;
-                    console.log('Client connected with id ' + data.id);
-                    host.send(JSON.stringify({
-                        type: 'client-connected',
-                        clientId: data.id
-                    }));
+                if (!host) {
+                    let errorMessage = 'Unable to join lobby, no host';
+                    console.error(errorMessage);
+                    ws.send(JSON.stringify({ type: 'error', message: errorMessage }));
+                    return;
                 }
-                else {
-                    console.log('Unable to register client');
-                    ws.send(JSON.stringify({ type: 'error', message: 'unable to join lobby' }));
+                if (!data.lobby_code || data.lobby_code !== lobbyCode) {
+                    let errorMessage = 'Unable to join lobby, incorrect lobby code';
+                    console.error(errorMessage);
+                    ws.send(JSON.stringify({ type: 'error', message: errorMessage }));
+                    return;
                 }
+                clients[data.id] = ws;
+                console.log('Client connected with id ' + data.id);
+                host.send(JSON.stringify({
+                    type: 'client-connected',
+                    clientId: data.id
+                }));
                 break;
             case 'offer':
                 console.log(`Forwarding offer to client with id ${data.clientId} ... `);
@@ -126,6 +132,7 @@ wss.on('connection', (ws) => {
         if (ws === host) {
             console.log('Host disconnected');
             host = null;
+            broadcast({ type: 'error', message: 'Host disconnected' });
         }
         else {
             for (let id in clients) {
@@ -136,4 +143,9 @@ wss.on('connection', (ws) => {
             }
         }
     });
+    function broadcast(message) {
+        for (let id in clients) {
+            clients[id].send(JSON.stringify(message));
+        }
+    }
 });

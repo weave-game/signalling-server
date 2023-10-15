@@ -7,7 +7,7 @@ const port = process.env.PORT ?? 8080;
 
 const httpServer = new HttpServer(app);
 httpServer.listen(port, () => {
-	console.log(`Server is listening on port ${port}`);
+  console.log(`Server is listening on port ${port}`);
 });
 
 const wss = new WebSocketServer({ server: httpServer });
@@ -17,130 +17,146 @@ let host: WebSocket | null = null;
 const clients: { [id: string]: WebSocket } = {};
 
 wss.on('connection', (ws: WebSocket) => {
-	ws.on('message', (message: string) => {
-		let data = JSON.parse(message);
+  ws.on('message', (message: string) => {
+    let data = JSON.parse(message);
 
-		switch (data.type) {
-			case 'register-host':
-				if (data.lobby_code) {
-					host = ws;
-					lobbyCode = data.lobby_code;
-					console.log('Host connected')
-				} else {
-					console.log('Missing lobby code in message')
-				}
-				break;
+    switch (data.type) {
+      case 'register-host':
+        if (data.lobby_code) {
+          host = ws;
+          lobbyCode = data.lobby_code;
+          console.log('Host connected')
+        } else {
+          console.error('Missing lobby code in message')
+        }
+        break;
 
-			case 'register-client':
-				if (data.lobby_code && data.lobby_code === lobbyCode && host) {
-					clients[data.id] = ws;
-					console.log('Client connected with id ' + data.id)
+      case 'register-client':
+        if (!host) {
+          let errorMessage = 'Unable to join lobby, no host';
+          console.error(errorMessage)
+          ws.send(JSON.stringify({ type: 'error', message: errorMessage }));
+          return;
+        }
 
-					host.send(JSON.stringify({
-						type: 'client-connected',
-						clientId: data.id
-					}))
-				} else {
-					console.log('Unable to register client')
-					ws.send(JSON.stringify({type: 'error', message: 'unable to join lobby'}));
-				}
-				break;
+        if (!data.lobby_code || data.lobby_code !== lobbyCode) {
+          let errorMessage = 'Unable to join lobby, incorrect lobby code';
+          console.error(errorMessage)
+          ws.send(JSON.stringify({ type: 'error', message: errorMessage }));
+          return;
+        }
 
-			case 'offer':
-				console.log(`Forwarding offer to client with id ${data.clientId} ... `);
+        clients[data.id] = ws;
+        console.log('Client connected with id ' + data.id)
 
-				if (clients[data.clientId]) {
-					let client = clients[data.clientId];
-					client.send(JSON.stringify({
-						type: 'offer',
-						offer: data.offer
-					}));
-					console.log('Forwarded offer')
-				} else {
-					console.error(`Could not forward offer, ${data.clientId} does not exist`);
-				}
-				break;
+        host.send(JSON.stringify({
+          type: 'client-connected',
+          clientId: data.id
+        }))
+        break;
 
-			case 'answer':
-				console.log('Forwarding answer to host');
+      case 'offer':
+        console.log(`Forwarding offer to client with id ${data.clientId} ... `);
 
-				if (host) {
-					host.send(JSON.stringify({
-						type: 'answer',
-						answer: data.answer,
-						clientId: data.clientId
-					}));
-				} else {
-					console.error('Could not forward answer, host does not exist');
-				}
-				break;
+        if (clients[data.clientId]) {
+          let client = clients[data.clientId];
+          client.send(JSON.stringify({
+            type: 'offer',
+            offer: data.offer
+          }));
+          console.log('Forwarded offer')
+        } else {
+          console.error(`Could not forward offer, ${data.clientId} does not exist`);
+        }
+        break;
 
-			case 'ice-candidate-client':
-				console.log(`Forwarding ICE candidate to host from client with id ${data.clientId}...`);
+      case 'answer':
+        console.log('Forwarding answer to host');
 
-				// Forward the ICE candidate to the host.
-				if (host) {
-					host.send(JSON.stringify({
-						type: 'ice-candidate',
-						candidate: data.candidate,
-						clientId: data.clientId
-					}));
-					console.log('Forwarded candidate')
-				} else {
-					console.error('Could not forward candidate, host does not exist');
-				}
-				break;
+        if (host) {
+          host.send(JSON.stringify({
+            type: 'answer',
+            answer: data.answer,
+            clientId: data.clientId
+          }));
+        } else {
+          console.error('Could not forward answer, host does not exist');
+        }
+        break;
 
-			case 'ice-candidate-host':
-				console.log('Forwarding ICE candidate to client from host...');
+      case 'ice-candidate-client':
+        console.log(`Forwarding ICE candidate to host from client with id ${data.clientId}...`);
 
-				// Forward the ICE candidate to the correct client.
-				if (clients[data.clientId]) {
-					let client = clients[data.clientId];
-					client.send(JSON.stringify({
-						type: 'ice-candidate',
-						candidate: data.candidate
-					}));
-					console.log('Forwarded candidate');
-				} else {
-					console.error(`Could not forward candidate, ${data.clientId} does not exist`);
-				}
-				break;
+        // Forward the ICE candidate to the host.
+        if (host) {
+          host.send(JSON.stringify({
+            type: 'ice-candidate',
+            candidate: data.candidate,
+            clientId: data.clientId
+          }));
+          console.log('Forwarded candidate')
+        } else {
+          console.error('Could not forward candidate, host does not exist');
+        }
+        break;
 
-			case 'message':
-				console.log('Forwarding message to client from host...');
+      case 'ice-candidate-host':
+        console.log('Forwarding ICE candidate to client from host...');
 
-				// Forward message to the correct client.
-				if (clients[data.clientId]) {
-					let client = clients[data.clientId];
-					client.send(JSON.stringify({
-						type: 'message',
-						message: data.message
-					}));
-					console.log('Forwarded message');
-				} else {
-					console.error(`Could not forward message, ${data.clientId} does not exist`);
-				}
-				break;
+        // Forward the ICE candidate to the correct client.
+        if (clients[data.clientId]) {
+          let client = clients[data.clientId];
+          client.send(JSON.stringify({
+            type: 'ice-candidate',
+            candidate: data.candidate
+          }));
+          console.log('Forwarded candidate');
+        } else {
+          console.error(`Could not forward candidate, ${data.clientId} does not exist`);
+        }
+        break;
 
-			default:
-				ws.send(JSON.stringify({ type: 'error', message: 'Unknown message type' }));
-				break;
+      case 'message':
+        console.log('Forwarding message to client from host...');
 
-		}
-	});
+        // Forward message to the correct client.
+        if (clients[data.clientId]) {
+          let client = clients[data.clientId];
+          client.send(JSON.stringify({
+            type: 'message',
+            message: data.message
+          }));
+          console.log('Forwarded message');
+        } else {
+          console.error(`Could not forward message, ${data.clientId} does not exist`);
+        }
+        break;
 
-	ws.on('close', () => {
-		if (ws === host) {
-			console.log('Host disconnected')
-			host = null;
-		} else {
-			for (let id in clients) {
-				if (clients[id] === ws) {
-					console.log('Client disconnected')
-					delete clients[id];
-				}
-			}
-		}
-	});
+      default:
+        ws.send(JSON.stringify({ type: 'error', message: 'Unknown message type' }));
+        break;
+
+    }
+  });
+
+  ws.on('close', () => {
+    if (ws === host) {
+      console.log('Host disconnected')
+      host = null;
+      broadcast({ type: 'error', message: 'Host disconnected' })
+    } else {
+      for (let id in clients) {
+        if (clients[id] === ws) {
+          console.log('Client disconnected')
+          delete clients[id];
+        }
+      }
+    }
+  });
+
+  function broadcast(message: any) {
+    for (let id in clients) {
+      clients[id].send(JSON.stringify(message))
+    }
+  }
 });

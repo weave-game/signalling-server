@@ -9,14 +9,23 @@ const http_1 = require("http");
 const ws_1 = require("ws");
 const app = (0, express_1.default)();
 const port = (_a = process.env.PORT) !== null && _a !== void 0 ? _a : 8080;
+let lobbyCode = null;
+let host = null;
+let clients = {};
+app.get('/api/status', (_, res) => {
+    res.json({ message: `Server is running, ${Object.keys(clients).length} are connected` });
+});
+app.get('/api/reset', (_, res) => {
+    lobbyCode = null;
+    host = null;
+    clients = {};
+    res.json({ message: 'Reset server' });
+});
 const httpServer = new http_1.Server(app);
 httpServer.listen(port, () => {
     console.log(`Server is listening on port ${port}`);
 });
 const wss = new ws_1.Server({ server: httpServer });
-let lobbyCode = null;
-let host = null;
-const clients = {};
 wss.on('connection', (ws) => {
     ws.on('message', (message) => {
         let data = JSON.parse(message);

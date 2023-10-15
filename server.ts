@@ -5,16 +5,27 @@ import WebSocket, { Server as WebSocketServer } from 'ws';
 const app = express();
 const port = process.env.PORT ?? 8080;
 
+let lobbyCode: string | null = null;
+let host: WebSocket | null = null;
+let clients: { [id: string]: WebSocket } = {};
+
+app.get('/api/status', (_, res) => {
+  res.json({ message: `Server is running, ${Object.keys(clients).length} are connected` });
+});
+
+app.get('/api/reset', (_, res) => {
+  lobbyCode = null;
+  host = null;
+  clients = {};
+  res.json({ message: 'Reset server' });
+});
+
 const httpServer = new HttpServer(app);
 httpServer.listen(port, () => {
   console.log(`Server is listening on port ${port}`);
 });
 
 const wss = new WebSocketServer({ server: httpServer });
-
-let lobbyCode: string | null = null;
-let host: WebSocket | null = null;
-const clients: { [id: string]: WebSocket } = {};
 
 wss.on('connection', (ws: WebSocket) => {
   ws.on('message', (message: string) => {

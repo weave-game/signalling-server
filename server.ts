@@ -1,22 +1,23 @@
 import express from 'express';
 import { Server as HttpServer } from 'http';
 import WebSocket, { Server as WebSocketServer } from 'ws';
+import { Lobby } from './types';
 
 const app = express();
 const port = process.env.PORT ?? 8080;
 
-let lobbyCode: string | null = null;
-let host: WebSocket | null = null;
-let clients: { [id: string]: WebSocket } = {};
+let lobbies: { [lobbyCode: string]: Lobby } = {};
 
 app.get('/api/status', (_, res) => {
-  res.json({ message: `Server is running, ${Object.keys(clients).length} are connected` });
+  res.json({ message: 'Server is running' });
+});
+
+app.get('/api/lobbies', (_, res) => {
+  res.json({ message: JSON.stringify(lobbies) });
 });
 
 app.post('/api/reset', (_, res) => {
-  lobbyCode = null;
-  host = null;
-  clients = {};
+  lobbies = {};
   res.json({ message: 'Reset server' });
 });
 
@@ -31,143 +32,270 @@ wss.on('connection', (ws: WebSocket) => {
   ws.on('message', (message: string) => {
     let data = JSON.parse(message);
 
+    const lobbyCode = data.lobbyCode;
+    if (!lobbyCode) {
+      ws.send(JSON.stringify({ type: 'error', message: 'Missing lobby code' }));
+      console.log('Missing lobby code in message');
+      return;
+    }
+
     switch (data.type) {
-      case 'register-host':
-        if (data.lobby_code) {
-          host = ws;
-          lobbyCode = data.lobby_code;
-          console.log('Host connected')
-        } else {
-          console.error('Missing lobby code in message')
-        }
+      case 'register-host': {
+        createLobby(lobbyCode, ws);
         break;
+      }
 
-      case 'register-client':
-        if (!host) {
-          let errorMessage = 'Unable to join lobby, no host';
-          console.error(errorMessage)
-          ws.send(JSON.stringify({ type: 'error', message: errorMessage }));
+      case 'register-client': {
+        let lobby: Lobby;
+        try {
+          lobby = getLobby(lobbyCode);
+        } catch (error) {
+          ws.send(JSON.stringify({ type: 'error', message: (error as Error).message }));
           return;
         }
 
-        if (!data.lobby_code || data.lobby_code !== lobbyCode) {
-          let errorMessage = 'Unable to join lobby, incorrect lobby code';
-          console.error(errorMessage)
-          ws.send(JSON.stringify({ type: 'error', message: errorMessage }));
+        const clientId = data.clientId;
+        if (!clientId) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Unable to join lobby, no ID in message' }));
           return;
         }
 
-        clients[data.id] = ws;
-        console.log('Client connected with id ' + data.id)
+        addClientToLobby(lobbyCode, clientId, ws);
 
-        host.send(JSON.stringify({
+        // @ts-expect-error - Host will not be null
+        lobby.host.send(JSON.stringify({
           type: 'client-connected',
-          clientId: data.id
-        }))
+          clientId: clientId
+        }));
         break;
+      }
 
-      case 'offer':
-        console.log(`Forwarding offer to client with id ${data.clientId} ... `);
-
-        if (clients[data.clientId]) {
-          let client = clients[data.clientId];
-          client.send(JSON.stringify({
-            type: 'offer',
-            offer: data.offer
-          }));
-          console.log('Forwarded offer')
-        } else {
-          console.error(`Could not forward offer, ${data.clientId} does not exist`);
+      case 'offer': {
+        let lobby: Lobby;
+        try {
+          lobby = getLobby(lobbyCode);
+        } catch (error) {
+          ws.send(JSON.stringify({ type: 'error', message: (error as Error).message }));
+          return;
         }
-        break;
 
-      case 'answer':
-        console.log('Forwarding answer to host');
-
-        if (host) {
-          host.send(JSON.stringify({
-            type: 'answer',
-            answer: data.answer,
-            clientId: data.clientId
-          }));
-        } else {
-          console.error('Could not forward answer, host does not exist');
+        const lobbyClients = lobby.clients;
+        if (!lobbyClients?.[data.clientId]) {
+          console.error(`Could not forward offer, client ${data.clientId} does not exist in lobby ${lobbyCode}`);
+          return;
         }
+
+        let client = lobbyClients[data.clientId];
+        client.send(JSON.stringify({
+          type: 'offer',
+          offer: data.offer
+        }));
+
+        console.log(`Forwarded offer to client with id ${data.clientId}`);
         break;
+      }
 
-      case 'ice-candidate-client':
-        console.log(`Forwarding ICE candidate to host from client with id ${data.clientId}...`);
-
-        // Forward the ICE candidate to the host.
-        if (host) {
-          host.send(JSON.stringify({
-            type: 'ice-candidate',
-            candidate: data.candidate,
-            clientId: data.clientId
-          }));
-          console.log('Forwarded candidate')
-        } else {
-          console.error('Could not forward candidate, host does not exist');
+      case 'answer': {
+        let lobby: Lobby;
+        try {
+          lobby = getLobby(lobbyCode);
+        } catch (error) {
+          ws.send(JSON.stringify({ type: 'error', message: (error as Error).message }));
+          return;
         }
-        break;
 
-      case 'ice-candidate-host':
-        console.log('Forwarding ICE candidate to client from host...');
-
-        // Forward the ICE candidate to the correct client.
-        if (clients[data.clientId]) {
-          let client = clients[data.clientId];
-          client.send(JSON.stringify({
-            type: 'ice-candidate',
-            candidate: data.candidate
-          }));
-          console.log('Forwarded candidate');
-        } else {
-          console.error(`Could not forward candidate, ${data.clientId} does not exist`);
+        const clientId = data.clientId;
+        if (!clientId) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Unable to forward answer, no ID in message' }));
+          return;
         }
+
+        // @ts-expect-error - Host will not be null
+        lobby.host.send(JSON.stringify({
+          type: 'answer',
+          answer: data.answer,
+          clientId: clientId
+        }));
+
+        console.log(`Forwarded answer to host of lobby ${lobbyCode}`);
         break;
+      }
+
+      case 'ice-candidate-client': {
+        let lobby: Lobby;
+        try {
+          lobby = getLobby(lobbyCode);
+        } catch (error) {
+          ws.send(JSON.stringify({ type: 'error', message: (error as Error).message }));
+          return;
+        }
+
+        const clientId = data.clientId;
+        if (!clientId) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Unable to forward ICE candidate, no ID in message' }));
+          return;
+        }
+
+        // @ts-expect-error - Host will not be null
+        lobby.host.send(JSON.stringify({
+          type: 'ice-candidate',
+          candidate: data.candidate,
+          clientId: clientId
+        }));
+
+        console.log(`Forwarded ICE candidate to host from client with id ${clientId} in lobby ${lobbyCode}`);
+        break;
+      }
+
+      case 'ice-candidate-host': {
+        let lobby: Lobby;
+        try {
+          lobby = getLobby(lobbyCode);
+        } catch (error) {
+          ws.send(JSON.stringify({ type: 'error', message: (error as Error).message }));
+          return;
+        }
+
+        const lobbyClients = lobby.clients;
+        if (!lobbyClients?.[data.clientId]) {
+          console.error(`Unable to forward ICE candidate, client ${data.clientId} in lobby ${lobbyCode} does not exist`);
+          return;
+        }
+
+        let client = lobbyClients[data.clientId];
+        client.send(JSON.stringify({
+          type: 'ice-candidate',
+          candidate: data.candidate
+        }));
+
+        console.log(`Forwarded ICE candidate from host to client with id ${data.clientId} in lobby ${lobbyCode}`);
+        break;
+      }
 
       case 'message':
-        console.log('Forwarding message to client from host...');
-
-        // Forward message to the correct client.
-        if (clients[data.clientId]) {
-          let client = clients[data.clientId];
-          client.send(JSON.stringify({
-            type: 'message',
-            message: data.message
-          }));
-          console.log('Forwarded message');
-        } else {
-          console.error(`Could not forward message, ${data.clientId} does not exist`);
+        let lobby: Lobby;
+        try {
+          lobby = getLobby(lobbyCode);
+        } catch (error) {
+          ws.send(JSON.stringify({ type: 'error', message: (error as Error).message }));
+          return;
         }
+
+        const lobbyClients = lobby.clients;
+        if (!lobbyClients?.[data.clientId]) {
+          console.error(`Could not forward message, client ${data.clientId} in lobby ${lobbyCode} does not exist`);
+          return;
+        }
+
+        let client = lobbyClients[data.clientId];
+        client.send(JSON.stringify({
+          type: 'message',
+          message: data.message
+        }));
+
+        console.log(`Forwarded message from host to client with id ${data.clientId} in lobby ${lobbyCode}`);
         break;
+
+      case 'color-change': {
+        let lobby: Lobby;
+        try {
+          lobby = getLobby(lobbyCode);
+        } catch (error) {
+          ws.send(JSON.stringify({ type: 'error', message: (error as Error).message }));
+          return;
+        }
+
+        const lobbyClients = lobby.clients;
+        if (!lobbyClients?.[data.clientId]) {
+          console.error(`Could not forward color-change, client ${data.clientId} in lobby ${lobbyCode} does not exist`);
+          return;
+        }
+
+        let client = lobbyClients[data.clientId];
+        client.send(JSON.stringify({
+          type: 'color-change',
+          color: data.color
+        }));
+
+        console.log(`Forwarded color-change from the host to client with id ${data.clientId} in lobby ${lobbyCode}`);
+        break;
+      }
 
       default:
         ws.send(JSON.stringify({ type: 'error', message: 'Unknown message type' }));
         break;
-
     }
   });
 
   ws.on('close', () => {
-    if (ws === host) {
-      console.log('Host disconnected')
-      host = null;
-      broadcast({ type: 'error', message: 'Host disconnected' })
-    } else {
-      for (let id in clients) {
-        if (clients[id] === ws) {
-          console.log('Client disconnected')
-          delete clients[id];
+    for (let code in lobbies) {
+      if (lobbies[code].host === ws) {
+        removeHostFromLobby(code);
+        break;
+      } else {
+        for (let id in lobbies[code].clients) {
+          if (lobbies[code].clients[id] === ws) {
+            removeClientFromLobby(code, id);
+          }
         }
       }
     }
   });
 
-  function broadcast(message: any) {
-    for (let id in clients) {
-      clients[id].send(JSON.stringify(message))
+  function createLobby(lobbyCode: string, hostWebSocket: WebSocket): void {
+    if (lobbies[lobbyCode]) {
+      throw new Error('Lobby already exists');
     }
+
+    lobbies[lobbyCode] = {
+      lobbyCode: lobbyCode,
+      host: hostWebSocket,
+      clients: {}
+    };
+
+    console.log(`Lobby created with code ${lobbyCode}`);
+  }
+
+  function addClientToLobby(lobbyCode: string, clientId: string, clientWebSocket: WebSocket): void {
+    const lobby = getLobby(lobbyCode);
+
+    if (lobby.clients[clientId]) {
+      throw new Error('Client ID already exists in this lobby');
+    }
+
+    lobby.clients[clientId] = clientWebSocket;
+    console.log('Client connected');
+  }
+
+  function removeClientFromLobby(lobbyCode: string, clientId: string): void {
+    const lobby = getLobby(lobbyCode);
+
+    if (lobby.host) {
+      lobby.host.send(JSON.stringify({ type: 'client-disconnected', clientId: clientId }));
+    }
+
+    delete lobby.clients[clientId];
+    console.log('Client disconnected');
+  }
+
+  function removeHostFromLobby(lobbyCode: string) {
+    broadcastToLobby(lobbyCode, { type: 'error', message: 'Host disconnected' });
+    delete lobbies[lobbyCode];
+    console.log('Host disconnected');
+  }
+
+  function getLobby(lobbyCode: string) {
+    if (lobbies[lobbyCode] && lobbies[lobbyCode].host) {
+      return lobbies[lobbyCode];
+    } else {
+      throw new Error(`Lobby with code ${lobbyCode} does not exist or does not have a host`);
+    }
+  }
+
+  function broadcastToLobby(lobbyCode: string, message: any) {
+    const lobby = getLobby(lobbyCode);
+    Object.entries(lobby.clients).forEach(([_, client]) => {
+      client.send(JSON.stringify(message));
+    })
   }
 });

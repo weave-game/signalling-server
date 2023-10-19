@@ -14,7 +14,11 @@ app.get('/api/status', (_, res) => {
     res.json({ message: 'Server is running' });
 });
 app.get('/api/lobbies', (_, res) => {
-    res.json({ message: JSON.stringify(lobbies) });
+    let lobbyInfo = {};
+    Object.entries(lobbies).forEach(([_, lobby]) => {
+        lobbyInfo[lobby.lobbyCode] = Object.keys(lobby.clients).length;
+    });
+    res.json({ message: JSON.stringify(lobbyInfo) });
 });
 app.post('/api/reset', (_, res) => {
     lobbies = {};

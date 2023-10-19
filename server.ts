@@ -303,3 +303,22 @@ wss.on('connection', (ws: WebSocket) => {
     })
   }
 });
+
+function pingClients() {
+  for (let code in lobbies) {
+    const lobby = lobbies[code];
+
+    if (lobby.host && lobby.host.readyState === WebSocket.OPEN) {
+      lobby.host.ping();
+    }
+
+    for (let id in lobby.clients) {
+      const client = lobby.clients[id];
+      if (client.readyState === WebSocket.OPEN) {
+        client.ping();
+      }
+    }
+  }
+}
+
+setInterval(pingClients, 30000);

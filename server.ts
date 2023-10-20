@@ -66,7 +66,6 @@ wss.on('connection', (ws: WebSocket) => {
 
         addClientToLobby(lobbyCode, clientId, ws);
 
-        // @ts-expect-error - Host will not be null
         lobby.host.send(JSON.stringify({
           type: 'client-connected',
           clientId: clientId
@@ -114,7 +113,6 @@ wss.on('connection', (ws: WebSocket) => {
           return;
         }
 
-        // @ts-expect-error - Host will not be null
         lobby.host.send(JSON.stringify({
           type: 'answer',
           answer: data.answer,
@@ -140,7 +138,6 @@ wss.on('connection', (ws: WebSocket) => {
           return;
         }
 
-        // @ts-expect-error - Host will not be null
         lobby.host.send(JSON.stringify({
           type: 'ice-candidate',
           candidate: data.candidate,
@@ -289,10 +286,10 @@ wss.on('connection', (ws: WebSocket) => {
   }
 
   function getLobby(lobbyCode: string) {
-    if (lobbies[lobbyCode] && lobbies[lobbyCode].host) {
+    if (lobbies[lobbyCode]) {
       return lobbies[lobbyCode];
     } else {
-      throw new Error(`Lobby with code ${lobbyCode} does not exist or does not have a host`);
+      throw new Error(`Lobby with code ${lobbyCode} does not exist`);
     }
   }
 

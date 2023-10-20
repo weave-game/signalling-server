@@ -1,7 +1,7 @@
-import WebSocket from 'ws';
+import type WebSocket from 'ws'
 
 export interface Lobby {
-    lobbyCode: string;
-    host: WebSocket;
-    clients: { [id: string]: WebSocket };
+  lobbyCode: string
+  host: WebSocket
+  clients: Record<string, WebSocket>
 }

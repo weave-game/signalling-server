@@ -37,7 +37,7 @@ app.get('/api/status', (_, res) => {
     res.json({ message: 'Server is running' });
 });
 app.get('/api/lobbies', (_, res) => {
-    let lobbyInfo = {};
+    const lobbyInfo = {};
     Object.entries(lobbies).forEach(([_, lobby]) => {
         lobbyInfo[lobby.lobbyCode] = Object.keys(lobby.clients).length;
     });
@@ -54,9 +54,9 @@ httpServer.listen(port, () => {
 const wss = new ws_1.Server({ server: httpServer });
 wss.on('connection', (ws) => {
     ws.on('message', (message) => {
-        let data = JSON.parse(message);
+        const data = JSON.parse(message);
         const lobbyCode = data.lobbyCode;
-        if (!lobbyCode) {
+        if (lobbyCode === '') {
             ws.send(JSON.stringify({ type: 'error', message: 'Missing lobby code' }));
             console.log('Missing lobby code in message');
             return;
@@ -76,15 +76,14 @@ wss.on('connection', (ws) => {
                     return;
                 }
                 const clientId = data.clientId;
-                if (!clientId) {
+                if (clientId === '') {
                     ws.send(JSON.stringify({ type: 'error', message: 'Unable to join lobby, no ID in message' }));
                     return;
                 }
                 addClientToLobby(lobbyCode, clientId, ws);
-                // @ts-expect-error - Host will not be null
                 lobby.host.send(JSON.stringify({
                     type: 'client-connected',
-                    clientId: clientId
+                    clientId
                 }));
                 break;
             }
@@ -98,11 +97,11 @@ wss.on('connection', (ws) => {
                     return;
                 }
                 const lobbyClients = lobby.clients;
-                if (!(lobbyClients === null || lobbyClients === void 0 ? void 0 : lobbyClients[data.clientId])) {
+                if ((lobbyClients === null || lobbyClients === void 0 ? void 0 : lobbyClients[data.clientId]) === undefined) {
                     console.error(`Could not forward offer, client ${data.clientId} does not exist in lobby ${lobbyCode}`);
                     return;
                 }
-                let client = lobbyClients[data.clientId];
+                const client = lobbyClients[data.clientId];
                 client.send(JSON.stringify({
                     type: 'offer',
                     offer: data.offer
@@ -120,15 +119,14 @@ wss.on('connection', (ws) => {
                     return;
                 }
                 const clientId = data.clientId;
-                if (!clientId) {
+                if (clientId === '') {
                     ws.send(JSON.stringify({ type: 'error', message: 'Unable to forward answer, no ID in message' }));
                     return;
                 }
-                // @ts-expect-error - Host will not be null
                 lobby.host.send(JSON.stringify({
                     type: 'answer',
                     answer: data.answer,
-                    clientId: clientId
+                    clientId
                 }));
                 console.log(`Forwarded answer to host of lobby ${lobbyCode}`);
                 break;
@@ -143,15 +141,14 @@ wss.on('connection', (ws) => {
                     return;
                 }
                 const clientId = data.clientId;
-                if (!clientId) {
+                if (clientId === '') {
                     ws.send(JSON.stringify({ type: 'error', message: 'Unable to forward ICE candidate, no ID in message' }));
                     return;
                 }
-                // @ts-expect-error - Host will not be null
                 lobby.host.send(JSON.stringify({
                     type: 'ice-candidate',
                     candidate: data.candidate,
-                    clientId: clientId
+                    clientId
                 }));
                 console.log(`Forwarded ICE candidate to host from client with id ${clientId} in lobby ${lobbyCode}`);
                 break;
@@ -166,11 +163,11 @@ wss.on('connection', (ws) => {
                     return;
                 }
                 const lobbyClients = lobby.clients;
-                if (!(lobbyClients === null || lobbyClients === void 0 ? void 0 : lobbyClients[data.clientId])) {
+                if ((lobbyClients === null || lobbyClients === void 0 ? void 0 : lobbyClients[data.clientId]) === undefined) {
                     console.error(`Unable to forward ICE candidate, client ${data.clientId} in lobby ${lobbyCode} does not exist`);
                     return;
                 }
-                let client = lobbyClients[data.clientId];
+                const client = lobbyClients[data.clientId];
                 client.send(JSON.stringify({
                     type: 'ice-candidate',
                     candidate: data.candidate
@@ -178,7 +175,7 @@ wss.on('connection', (ws) => {
                 console.log(`Forwarded ICE candidate from host to client with id ${data.clientId} in lobby ${lobbyCode}`);
                 break;
             }
-            case 'message':
+            case 'message': {
                 let lobby;
                 try {
                     lobby = getLobby(lobbyCode);
@@ -188,17 +185,18 @@ wss.on('connection', (ws) => {
                     return;
                 }
                 const lobbyClients = lobby.clients;
-                if (!(lobbyClients === null || lobbyClients === void 0 ? void 0 : lobbyClients[data.clientId])) {
+                if ((lobbyClients === null || lobbyClients === void 0 ? void 0 : lobbyClients[data.clientId]) === undefined) {
                     console.error(`Could not forward message, client ${data.clientId} in lobby ${lobbyCode} does not exist`);
                     return;
                 }
-                let client = lobbyClients[data.clientId];
+                const client = lobbyClients[data.clientId];
                 client.send(JSON.stringify({
                     type: 'message',
                     message: data.message
                 }));
                 console.log(`Forwarded message from host to client with id ${data.clientId} in lobby ${lobbyCode}`);
                 break;
+            }
             case 'color-change': {
                 let lobby;
                 try {
@@ -209,11 +207,11 @@ wss.on('connection', (ws) => {
                     return;
                 }
                 const lobbyClients = lobby.clients;
-                if (!(lobbyClients === null || lobbyClients === void 0 ? void 0 : lobbyClients[data.clientId])) {
+                if ((lobbyClients === null || lobbyClients === void 0 ? void 0 : lobbyClients[data.clientId]) === undefined) {
                     console.error(`Could not forward color-change, client ${data.clientId} in lobby ${lobbyCode} does not exist`);
                     return;
                 }
-                let client = lobbyClients[data.clientId];
+                const client = lobbyClients[data.clientId];
                 client.send(JSON.stringify({
                     type: 'color-change',
                     color: data.color
@@ -227,13 +225,13 @@ wss.on('connection', (ws) => {
         }
     });
     ws.on('close', () => {
-        for (let code in lobbies) {
+        for (const code in lobbies) {
             if (lobbies[code].host === ws) {
                 removeHostFromLobby(code);
                 break;
             }
             else {
-                for (let id in lobbies[code].clients) {
+                for (const id in lobbies[code].clients) {
                     if (lobbies[code].clients[id] === ws) {
                         removeClientFromLobby(code, id);
                     }
@@ -242,11 +240,11 @@ wss.on('connection', (ws) => {
         }
     });
     function createLobby(lobbyCode, hostWebSocket) {
-        if (lobbies[lobbyCode]) {
+        if (lobbies[lobbyCode] !== undefined) {
             throw new Error('Lobby already exists');
         }
         lobbies[lobbyCode] = {
-            lobbyCode: lobbyCode,
+            lobbyCode,
             host: hostWebSocket,
             clients: {}
         };
@@ -254,7 +252,7 @@ wss.on('connection', (ws) => {
     }
     function addClientToLobby(lobbyCode, clientId, clientWebSocket) {
         const lobby = getLobby(lobbyCode);
-        if (lobby.clients[clientId]) {
+        if (lobby.clients[clientId] !== undefined) {
             throw new Error('Client ID already exists in this lobby');
         }
         lobby.clients[clientId] = clientWebSocket;
@@ -262,23 +260,25 @@ wss.on('connection', (ws) => {
     }
     function removeClientFromLobby(lobbyCode, clientId) {
         const lobby = getLobby(lobbyCode);
-        if (lobby.host) {
-            lobby.host.send(JSON.stringify({ type: 'client-disconnected', clientId: clientId }));
+        if (lobby.host !== undefined) {
+            lobby.host.send(JSON.stringify({ type: 'client-disconnected', clientId }));
         }
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
         delete lobby.clients[clientId];
         console.log('Client disconnected');
     }
     function removeHostFromLobby(lobbyCode) {
         broadcastToLobby(lobbyCode, { type: 'error', message: 'Host disconnected' });
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
         delete lobbies[lobbyCode];
         console.log('Host disconnected');
     }
     function getLobby(lobbyCode) {
-        if (lobbies[lobbyCode] && lobbies[lobbyCode].host) {
+        if (lobbies[lobbyCode] !== undefined) {
             return lobbies[lobbyCode];
         }
         else {
-            throw new Error(`Lobby with code ${lobbyCode} does not exist or does not have a host`);
+            throw new Error(`Lobby with code ${lobbyCode} does not exist`);
         }
     }
     function broadcastToLobby(lobbyCode, message) {
@@ -289,12 +289,12 @@ wss.on('connection', (ws) => {
     }
 });
 function pingClients() {
-    for (let code in lobbies) {
+    for (const code in lobbies) {
         const lobby = lobbies[code];
-        if (lobby.host && lobby.host.readyState === ws_1.default.OPEN) {
+        if (lobby.host !== undefined && lobby.host.readyState === ws_1.default.OPEN) {
             lobby.host.ping();
         }
-        for (let id in lobby.clients) {
+        for (const id in lobby.clients) {
             const client = lobby.clients[id];
             if (client.readyState === ws_1.default.OPEN) {
                 client.ping();

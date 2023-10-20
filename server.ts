@@ -272,9 +272,7 @@ wss.on('connection', (ws: WebSocket) => {
   function removeClientFromLobby (lobbyCode: string, clientId: string): void {
     const lobby = getLobby(lobbyCode)
 
-    if (lobby.host !== undefined) {
-      lobby.host.send(JSON.stringify({ type: 'client-disconnected', clientId }))
-    }
+    lobby.host.send(JSON.stringify({ type: 'client-disconnected', clientId }))
 
     // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
     delete lobby.clients[clientId]
@@ -308,9 +306,7 @@ function pingClients (): void {
   for (const code in lobbies) {
     const lobby = lobbies[code]
 
-    if (lobby.host !== undefined && lobby.host.readyState === WebSocket.OPEN) {
-      lobby.host.ping()
-    }
+    lobby.host.ping()
 
     for (const id in lobby.clients) {
       const client = lobby.clients[id]

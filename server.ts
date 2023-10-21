@@ -36,7 +36,8 @@ wss.on('connection', (ws: WebSocket) => {
   ws.on('message', (message: string) => {
     const data = JSON.parse(message)
 
-    const lobbyCode: string = data.lobbyCode
+    const lobbyCode: string = data.lobbyCode.toUpperCase()
+
     if (lobbyCode === '') {
       ws.send(JSON.stringify({ type: 'error', message: 'Missing lobby code' }))
       console.log('Missing lobby code in message')

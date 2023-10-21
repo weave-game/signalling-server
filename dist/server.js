@@ -55,7 +55,7 @@ const wss = new ws_1.Server({ server: httpServer });
 wss.on('connection', (ws) => {
     ws.on('message', (message) => {
         const data = JSON.parse(message);
-        const lobbyCode = data.lobbyCode;
+        const lobbyCode = data.lobbyCode.toUpperCase();
         if (lobbyCode === '') {
             ws.send(JSON.stringify({ type: 'error', message: 'Missing lobby code' }));
             console.log('Missing lobby code in message');
@@ -260,9 +260,7 @@ wss.on('connection', (ws) => {
     }
     function removeClientFromLobby(lobbyCode, clientId) {
         const lobby = getLobby(lobbyCode);
-        if (lobby.host !== undefined) {
-            lobby.host.send(JSON.stringify({ type: 'client-disconnected', clientId }));
-        }
+        lobby.host.send(JSON.stringify({ type: 'client-disconnected', clientId }));
         // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
         delete lobby.clients[clientId];
         console.log('Client disconnected');
@@ -291,9 +289,7 @@ wss.on('connection', (ws) => {
 function pingClients() {
     for (const code in lobbies) {
         const lobby = lobbies[code];
-        if (lobby.host !== undefined && lobby.host.readyState === ws_1.default.OPEN) {
-            lobby.host.ping();
-        }
+        lobby.host.ping();
         for (const id in lobby.clients) {
             const client = lobby.clients[id];
             if (client.readyState === ws_1.default.OPEN) {
